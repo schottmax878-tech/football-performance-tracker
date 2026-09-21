@@ -1,14 +1,14 @@
+import csv
 from datetime import date, datetime
+import io
+import sqlite3
 import matplotlib.pyplot as plt
 import numpy as np
-import streamlit as st
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 from reportlab.platypus import Table, TableStyle
-import sqlite3 
-import csv
-import io
+import streamlit as st
 
 # =========================
 # 1. KONFIGURATION & DICTIONARY
@@ -17,7 +17,6 @@ import io
 st.set_page_config(
     page_title="Football Performance Tracker", page_icon="⚽", layout="wide"
 )
-
 
 disziplinen = {
     "Sprint": {
@@ -53,6 +52,58 @@ disziplinen = {
 # =========================
 # 2. BERECHNUNGS-LOGIK & SPEICHERUNG
 # =========================
+
+
+def generiere_ki_empfehlung(sprint, sprung, test505, gesamtscore):
+    empfehlungen = []
+
+    # 1. Sprint-Analyse (30m Sprint)
+    if sprint > 4.3:
+        empfehlungen.append(
+            "⚡ **Sprint & Antritt:** Fokus auf Beschleunigung und Video-Analyse der Schrittfrequenz. "
+            "Empfohlenes Training: 3x5 Schlitten-Sprints (Sled Pushes) & Hill Sprints."
+        )
+    elif sprint <= 4.0:
+        empfehlungen.append(
+            "⚡ **Sprint & Antritt:** Hervorragende Grundgeschwindigkeit! Erhalte diese durch "
+            "Fliegende Sprints (Fly-Sprints mit 20m Anlauf) & Maximalkraft-Erhaltung."
+        )
+
+    # 2. Sprungkraft-Analyse (Explosivkraft)
+    if sprung < 45.0:
+        empfehlungen.append(
+            "💥 **Explosivkraft (Sprung):** Hier liegt Potenzial. "
+            "Empfohlenes Training: Plyometrie (Box Jumps, Depth Jumps) & schwere Kniebeugen (3-5 Wdh.)."
+        )
+    else:
+        empfehlungen.append(
+            "💥 **Explosivkraft (Sprung):** Sehr gute Reaktivkraft. Fokus auf einbeiniges "
+            "Krafttraining (Single-Leg Romanian Deadlifts) zur Verletzungsprävention."
+        )
+
+    # 3. 505-Test (Richtungswechsel / Agilität)
+    if test505 > 2.5:
+        empfehlungen.append(
+            "🔄 **Richtungswechsel (505-Test):** Verbesserungspotenzial bei der Abbremsbewegung. "
+            "Empfohlenes Training: Cone-Drills, Deceleration Drills (Abbremsen auf Signal) & Hüftmobilisierung."
+        )
+    else:
+        empfehlungen.append(
+            "🔄 **Richtungswechsel (505-Test):** Top Wendigkeit und Körperschwerpunkt-Kontrolle!"
+        )
+
+    # 4. Fazit anhand des Gesamtscores
+    if gesamtscore >= 80:
+        status = "🟢 **Top-Athlet-Status:** Ausgeglichenes, hohes Leistungsniveau."
+    elif gesamtscore >= 60:
+        status = (
+            "🟡 **Solides Fundament:** Gezielte Arbeit an den schwächeren"
+            " Teilbereichen wird den Score schnell anheben."
+        )
+    else:
+        status = "🔴 **Aufbauphase:** Fokus auf athletische Grundlagenausdauer und Bewegungsausführung legen."
+
+    return status, empfehlungen
 
 
 def init_db():
@@ -95,9 +146,9 @@ def testtag_speichern_sqlite(daten):
     conn.commit()
     conn.close()
 
+
 def testtage_laden_sqlite():
     conn = sqlite3.connect("performance.db")
-    # Damit wir auf Spalten per Namen zugreifen können (wie im Dictionary)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM testtage")
@@ -120,6 +171,8 @@ def testtage_laden_sqlite():
 
     conn.close()
     return testtage
+
+
 # 1. Daten laden
 init_db()
 testtage = testtage_laden_sqlite()
@@ -144,28 +197,29 @@ if gewaehlter_spieler != "Alle Spieler":
 else:
     gefilterte_testtage = testtage
 
+
 def radar_chart_erstellen(sprint_pkt, sprung_pkt, test505_pkt, name):
     kategorien = ["Sprint", "Sprung", "505-Agilität"]
     werte = [sprint_pkt, sprung_pkt, test505_pkt]
 
-    # Kreis schließen (ersten Wert am Ende wiederholen)
     werte += werte[:1]
-    winkel = np.linspace(0, 2 * np.pi, len(kategorien), endpoint=False).tolist()
+    winkel = np.linspace(
+        0, 2 * np.pi, len(kategorien), endpoint=False
+    ).tolist()
     winkel += winkel[:1]
 
     fig, ax = plt.subplots(figsize=(5, 5), subplot_kw=dict(polar=True))
 
-    # Fläche zeichnen
     ax.fill(winkel, werte, color="#003399", alpha=0.25)
     ax.plot(winkel, werte, color="#003399", linewidth=2)
 
-    # Achsen-Beschriftung
     ax.set_xticks(winkel[:-1])
     ax.set_xticklabels(kategorien, fontsize=11, fontweight="bold")
     ax.set_ylim(0, 100)
 
     ax.set_title(f"Stärkenprofil: {name}", y=1.1, fontsize=13)
     return fig
+
 
 def sprung_bewerten(hoehe):
     if hoehe < 50:
@@ -304,7 +358,6 @@ def pdf_bericht_erstellen(spieler, dateiname="Performance_Bericht.pdf"):
 # 3. STREAMLIT OBERFLÄCHE
 # =========================
 
-
 st.title("⚽ Football Performance Dashboard")
 
 # Navigation
@@ -314,7 +367,7 @@ menue = st.sidebar.radio(
         "📝 Neuen Test erfassen",
         "📊 Testhistorie & Bestwerte",
         "📈 Graph & Trends",
-        "🏆 Leaderboard & Radar",  
+        "🏆 Leaderboard & Radar",
         "📄 PDF Export",
     ],
 )
@@ -377,13 +430,12 @@ if menue == "📝 Neuen Test erfassen":
             }
 
             testtag_speichern_sqlite(neuer_testtag)
-       
+
             st.success(f"Testtag für {name} erfolgreich gespeichert!")
             st.metric(
                 "Erreichter Gesamtscore",
                 f"{ergebnisse['Gesamtscore']:.1f} / 100",
             )
-            
 
 
 # --- MENÜ 2: HISTORIE & BESTWERTE ---
@@ -396,7 +448,6 @@ elif menue == "📊 Testhistorie & Bestwerte":
         st.subheader("🏆 Deine Bestwerte")
         b_col1, b_col2, b_col3 = st.columns(3)
 
-        # Sicheres Filtern veralteter/unvollständiger JSON-Datensätze
         valid_sprint = [t for t in gefilterte_testtage if "Beste Zeit" in t]
         valid_sprung = [t for t in gefilterte_testtage if "Sprunghoehe" in t]
         valid_score = [t for t in gefilterte_testtage if "Gesamtscore" in t]
@@ -417,13 +468,29 @@ elif menue == "📊 Testhistorie & Bestwerte":
         st.subheader("📋 Historie aller Tests")
         st.dataframe(gefilterte_testtage, use_container_width=True)
 
+        # --- CSV EXPORT ---
+        buffer = io.StringIO()
+        fieldnames = list(gefilterte_testtage[0].keys())
+        writer = csv.DictWriter(buffer, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(gefilterte_testtage)
+        csv_daten = buffer.getvalue()
+
+        st.download_button(
+            label="📥 Historie als CSV herunterladen (Excel)",
+            data=csv_daten,
+            file_name=f"Performance_Historie_{gewaehlter_spieler}.csv",
+            mime="text/csv",
+        )
+
 # --- MENÜ 3: GRAPH & TRENDS ---
 elif menue == "📈 Graph & Trends":
     st.header("📈 Leistungskurve & Trendanalyse")
 
     if len(gefilterte_testtage) < 2:
         st.warning(
-            "Du benötigst mindestens 2 Testtage, um Verläufe und Trendlinien anzuzeigen."
+            "Du benötigst mindestens 2 Testtage, um Verläufe und Trendlinien"
+            " anzuzeigen."
         )
     else:
         disziplin_auswahl = st.selectbox(
@@ -444,7 +511,6 @@ elif menue == "📈 Graph & Trends":
 
             fig, ax = plt.subplots(figsize=(8, 4))
 
-            # Messwerte als Kurve
             ax.plot(
                 daten,
                 werte,
@@ -454,12 +520,10 @@ elif menue == "📈 Graph & Trends":
                 label=info["anzeigename"],
             )
 
-            # Trendlinie berechnen (Lineare Regression)
             x_indizes = np.arange(len(werte))
             z = np.polyfit(x_indizes, werte, 1)
             trend_funktion = np.poly1d(z)
 
-            # Trendlinie im Plot zeichnen
             ax.plot(
                 daten,
                 trend_funktion(x_indizes),
@@ -476,7 +540,6 @@ elif menue == "📈 Graph & Trends":
 
             st.pyplot(fig)
 
-            # Automatische Auswertung der Trendlinie unter Berücksichtigung der Toleranz
             steigung = z[0]
             kleiner_ist_besser = info["kleiner_ist_besser"]
 
@@ -485,11 +548,83 @@ elif menue == "📈 Graph & Trends":
             elif (steigung < 0 and kleiner_ist_besser) or (
                 steigung > 0 and not kleiner_ist_besser
             ):
-                st.success("🔥 **Trend:** Positive Entwicklung! Du verbesserst dich.")
+                st.success(
+                    "🔥 **Trend:** Positive Entwicklung! Du verbesserst dich."
+                )
             else:
                 st.warning("⚠️ **Trend:** Leicht rückläufige Performance.")
 
-# --- MENÜ 4: PDF EXPORT ---
+# --- MENÜ 4: LEADERBOARD & RADAR ---
+elif menue == "🏆 Leaderboard & Radar":
+    st.header("🏆 Team-Leaderboard & Stärkenprofil")
+
+    col_radar, col_leaderboard = st.columns([1, 1])
+
+    # --- RADAR CHART & KI EMPFEHLUNG ---
+    with col_radar:
+        st.subheader("🕸️ Stärkenprofil (Radar)")
+        if not gefilterte_testtage:
+            st.info("Keine Daten vorhanden.")
+        else:
+            letzter = gefilterte_testtage[-1]
+
+            _, p_sprint = sprint_bewerten(letzter.get("Beste Zeit", 2.0))
+            _, p_sprung = sprung_bewerten(letzter.get("Sprunghoehe", 0))
+            _, p_505 = test505_bewerten(letzter.get("Test_505_Zeit", 3.0))
+
+            fig_radar = radar_chart_erstellen(
+                p_sprint, p_sprung, p_505, letzter.get("Name", "Athlet")
+            )
+            st.pyplot(fig_radar)
+
+            # --- KI EMPFEHLUNGEN ANZEIGEN ---
+            st.divider()
+            st.subheader("🤖 KI-Trainingsempfehlung")
+
+            status, tipps = generiere_ki_empfehlung(
+                letzter.get("Beste Zeit", 4.0),
+                letzter.get("Sprunghoehe", 50.0),
+                letzter.get("Test_505_Zeit", 2.5),
+                letzter.get("Gesamtscore", 70.0),
+            )
+
+            st.info(status)
+            for tipp in tipps:
+                st.write(f"- {tipp}")
+
+    # --- LEADERBOARD (Gesamtes Team) ---
+    with col_leaderboard:
+        st.subheader("🥇 Team-Bestenliste")
+        if not testtage:
+            st.info("Keine Teamdaten vorhanden.")
+        else:
+            bestenliste = {}
+            for t in testtage:
+                spieler_name = t.get("Name", "Unbekannt")
+                score = t.get("Gesamtscore", 0)
+
+                if (
+                    spieler_name not in bestenliste
+                    or score > bestenliste[spieler_name]
+                ):
+                    bestenliste[spieler_name] = round(score, 1)
+
+            rangliste = sorted(
+                bestenliste.items(), key=lambda x: x[1], reverse=True
+            )
+
+            st.table(
+                [
+                    {
+                        "Rang": i + 1,
+                        "Spieler": name,
+                        "Bester Score": f"{score} Pkt",
+                    }
+                    for i, (name, score) in enumerate(rangliste)
+                ]
+            )
+
+# --- MENÜ 5: PDF EXPORT ---
 elif menue == "📄 PDF Export":
     st.header("📄 PDF-Bericht generieren")
 
@@ -512,62 +647,4 @@ elif menue == "📄 PDF Export":
                 data=file,
                 file_name=f"Performance_{name}.pdf",
                 mime="application/pdf",
-            )
-# --- MENÜ 4: LEADERBOARD & RADAR ---
-elif menue == "🏆 Leaderboard & Radar":
-    st.header("🏆 Team-Leaderboard & Stärkenprofil")
-
-    col_radar, col_leaderboard = st.columns([1, 1])
-
-    # --- RADAR CHART (Einzelsportler) ---
-    with col_radar:
-        st.subheader("🕸️ Stärkenprofil (Radar)")
-        if not gefilterte_testtage:
-            st.info("Keine Daten vorhanden.")
-        else:
-            letzter = gefilterte_testtage[-1]
-
-            # Punktzahlen auswerten
-            _, p_sprint = sprint_bewerten(letzter.get("Beste Zeit", 2.0))
-            _, p_sprung = sprung_bewerten(letzter.get("Sprunghoehe", 0))
-            _, p_505 = test505_bewerten(letzter.get("Test_505_Zeit", 3.0))
-
-            fig_radar = radar_chart_erstellen(
-                p_sprint, p_sprung, p_505, letzter.get("Name", "Athlet")
-            )
-            st.pyplot(fig_radar)
-
-    # --- LEADERBOARD (Gesamtes Team) ---
-    with col_leaderboard:
-        st.subheader("🥇 Team-Bestenliste")
-        if not testtage:
-            st.info("Keine Teamdaten vorhanden.")
-        else:
-            # Beste Gesamtscores pro Spieler ermitteln
-            bestenliste = {}
-            for t in testtage:
-                spieler_name = t.get("Name", "Unbekannt")
-                score = t.get("Gesamtscore", 0)
-
-                if (
-                    spieler_name not in bestenliste
-                    or score > bestenliste[spieler_name]
-                ):
-                    bestenliste[spieler_name] = round(score, 1)
-
-            # Sortieren nach höchstem Score
-            rangliste = sorted(
-                bestenliste.items(), key=lambda x: x[1], reverse=True
-            )
-
-            # Als Tabelle ausgeben
-            st.table(
-                [
-                    {
-                        "Rang": i + 1,
-                        "Spieler": name,
-                        "Bester Score": f"{score} Pkt",
-                    }
-                    for i, (name, score) in enumerate(rangliste)
-                ]
             )
