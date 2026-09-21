@@ -198,28 +198,45 @@ else:
     gefilterte_testtage = testtage
 
 
-def radar_chart_erstellen(sprint_pkt, sprung_pkt, test505_pkt, name):
+def radar_chart_erstellen(p1_daten, p2_daten=None):
     kategorien = ["Sprint", "Sprung", "505-Agilität"]
-    werte = [sprint_pkt, sprung_pkt, test505_pkt]
+    num_vars = len(kategorien)
 
-    werte += werte[:1]
-    winkel = np.linspace(
-        0, 2 * np.pi, len(kategorien), endpoint=False
-    ).tolist()
+    winkel = np.linspace(0, 2 * np.pi, num_vars, endpoint=False).tolist()
     winkel += winkel[:1]
 
     fig, ax = plt.subplots(figsize=(5, 5), subplot_kw=dict(polar=True))
 
-    ax.fill(winkel, werte, color="#003399", alpha=0.25)
-    ax.plot(winkel, werte, color="#003399", linewidth=2)
+    # Spieler 1
+    werte1 = p1_daten["werte"] + [p1_daten["werte"][0]]
+    ax.fill(winkel, werte1, color="#003399", alpha=0.25)
+    ax.plot(
+        winkel,
+        werte1,
+        color="#003399",
+        linewidth=2,
+        label=p1_daten.get("name", "Spieler 1"),
+    )
+
+    # Spieler 2 (optional)
+    if p2_daten:
+        werte2 = p2_daten["werte"] + [p2_daten["werte"][0]]
+        ax.fill(winkel, werte2, color="#E74C3C", alpha=0.2, linestyle="--")
+        ax.plot(
+            winkel,
+            werte2,
+            color="#E74C3C",
+            linewidth=2,
+            linestyle="--",
+            label=p2_daten.get("name", "Spieler 2"),
+        )
 
     ax.set_xticks(winkel[:-1])
     ax.set_xticklabels(kategorien, fontsize=11, fontweight="bold")
     ax.set_ylim(0, 100)
+    ax.legend(loc="upper right", bbox_to_anchor=(1.2, 1.1))
 
-    ax.set_title(f"Stärkenprofil: {name}", y=1.1, fontsize=13)
     return fig
-
 
 def sprung_bewerten(hoehe):
     if hoehe < 50:
@@ -560,32 +577,69 @@ elif menue == "🏆 Leaderboard & Radar":
 
     col_radar, col_leaderboard = st.columns([1, 1])
 
-    # --- RADAR CHART & KI EMPFEHLUNG ---
+    # --- RADAR CHART & VERGLEICH ---
     with col_radar:
-        st.subheader("🕸️ Stärkenprofil (Radar)")
-        if not gefilterte_testtage:
+        st.subheader("🕸️ Stärkenprofil & Vergleich")
+        if not testtage:
             st.info("Keine Daten vorhanden.")
         else:
-            letzter = gefilterte_testtage[-1]
-
-            _, p_sprint = sprint_bewerten(letzter.get("Beste Zeit", 2.0))
-            _, p_sprung = sprung_bewerten(letzter.get("Sprunghoehe", 0))
-            _, p_505 = test505_bewerten(letzter.get("Test_505_Zeit", 3.0))
-
-            fig_radar = radar_chart_erstellen(
-                p_sprint, p_sprung, p_505, letzter.get("Name", "Athlet")
+            # Multi-Select / Auswahl für Vergleich
+            alle_namen = sorted(
+                list(set(t.get("Name") for t in testtage if t.get("Name")))
             )
+
+            p1_name = st.selectbox("Hauptspieler:", alle_namen, index=0)
+            vergleich_aktiv = st.checkbox("Zweiten Spieler zum Vergleich anzeigen")
+
+            p1_tests = [t for t in testtage if t.get("Name") == p1_name]
+            p1_letzter = p1_tests[-1] if p1_tests else {}
+
+            _, p1_sprint = sprint_bewerten(p1_letzter.get("Beste Zeit", 2.0))
+            _, p1_sprung = sprung_bewerten(p1_letzter.get("Sprunghoehe", 0))
+            _, p1_505 = test505_bewerten(p1_letzter.get("Test_505_Zeit", 3.0))
+
+            p1_daten = {
+                "name": p1_name,
+                "werte": [p1_sprint, p1_sprung, p1_505],
+            }
+
+            p2_daten = None
+            if vergleich_aktiv:
+                p2_namen_options = [n for n in alle_namen if n != p1_name]
+                if p2_namen_options:
+                    p2_name = st.selectbox(
+                        "Vergleichsspieler:", p2_namen_options
+                    )
+                    p2_tests = [t for t in testtage if t.get("Name") == p2_name]
+                    p2_letzter = p2_tests[-1] if p2_tests else {}
+
+                    _, p2_sprint = sprint_bewerten(
+                        p2_letzter.get("Beste Zeit", 2.0)
+                    )
+                    _, p2_sprung = sprung_bewerten(
+                        p2_letzter.get("Sprunghoehe", 0)
+                    )
+                    _, p2_505 = test505_bewerten(
+                        p2_letzter.get("Test_505_Zeit", 3.0)
+                    )
+
+                    p2_daten = {
+                        "name": p2_name,
+                        "werte": [p2_sprint, p2_sprung, p2_505],
+                    }
+
+            fig_radar = radar_chart_erstellen(p1_daten, p2_daten)
             st.pyplot(fig_radar)
 
-            # --- KI EMPFEHLUNGEN ANZEIGEN ---
+            # --- KI EMPFEHLUNGEN ---
             st.divider()
-            st.subheader("🤖 KI-Trainingsempfehlung")
+            st.subheader(f"🤖 KI-Empfehlung für {p1_name}")
 
             status, tipps = generiere_ki_empfehlung(
-                letzter.get("Beste Zeit", 4.0),
-                letzter.get("Sprunghoehe", 50.0),
-                letzter.get("Test_505_Zeit", 2.5),
-                letzter.get("Gesamtscore", 70.0),
+                p1_letzter.get("Beste Zeit", 4.0),
+                p1_letzter.get("Sprunghoehe", 50.0),
+                p1_letzter.get("Test_505_Zeit", 2.5),
+                p1_letzter.get("Gesamtscore", 70.0),
             )
 
             st.info(status)
